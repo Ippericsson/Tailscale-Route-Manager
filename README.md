@@ -1,4 +1,5 @@
-<img width="1777" height="834" alt="image" src="https://github.com/user-attachments/assets/f3329c99-2e88-4a25-a05f-213f3f7a3d14" />
+<img width="1712" height="797" alt="image" src="https://github.com/user-attachments/assets/ff566c09-82d3-4a66-a5f0-8c37997bdbf2" />
+
 
 # Tailscale-Route-Manager
 
