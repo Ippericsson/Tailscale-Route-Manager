@@ -13,7 +13,7 @@ sudo apt install apache2 libapache2-mod-wsgi-py3 python3-venv python3-pip -y<br/
 
 ## 2. Transfer the tailscale app to server using Git
 cd /var/www <br>
-git clone git@github.com:IppericssonTailscale-Route-Manager.git<br>
+git clone git@github.com:Ippericsson/Tailscale-Route-Manager.git<br>
 
 ## 4. Create Python virtual environment
 cd /var/www/Tailscale-Route-Manager/tailscale-web<br/>
