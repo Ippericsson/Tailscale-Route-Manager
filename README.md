@@ -5,7 +5,6 @@
 
  **Note**: We are assuming this is a fresh server with only tailscale installed and working<br>
  **Note**: Ensure tailscale is **NOT** running before starting this<br>
- **Note**: This also assumes GitHub SSH has already been setup, if not, you can also download the repo move it to the correct place and unzip it<br>
 
 ## 1. Install required packages
 sudo apt update <br/>
