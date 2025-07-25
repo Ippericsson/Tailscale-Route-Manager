@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Tailscale Route Manager</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            background: #eee;
+            padding: 40px;
+            text-align: center;
+        }
+        img.logo {
+            max-height: 60px;
+            margin-bottom: 10px;
+        }
+        h1 {
+            margin: 10px 0 20px;
+        }
+        #status-message {
+            font-weight: bold;
+            margin-bottom: 20px;
+            color: #444;
+        }
+        form {
+            margin-bottom: 30px;
+        }
+        input[type="text"] {
+            padding: 6px 10px;
+            font-size: 14px;
+            width: 200px;
+            margin-right: 10px;
+        }
+        input.filter-box {
+            width: 90%;
+            padding: 4px;
+            margin-bottom: 5px;
+        }
+        button {
+            padding: 4px 10px;
+            font-size: 13px;
+            cursor: pointer;
+        }
+        table {
+            width: 90%;
+            margin: 0 auto 40px;
+            border-collapse: collapse;
+            background: white;
+            font-size: 14px;
+        }
+        th, td {
+            padding: 6px 8px;
+            border: 1px solid #aaa;
+            text-align: left;
+        }
+        th {
+            background: #ddd;
+            cursor: pointer;
+        }
+        .status-online {
+            color: green;
+            font-weight: bold;
+        }
+        .status-offline {
+            color: red;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+    <img src="/static/logo.jpg" class="logo" alt="Logo">
+    <h1>Tailscale Route Manager</h1>
+    <h3>Server: {{ server_hostname }}</h3>
+    <h3>OS: {{ server_os }}
+    <div id="status-message"></div>
+
+    <form method="post" action="/add">
+        <input type="text" name="route" placeholder="e.g. 10.0.0.0/24" required>
+        <input type="text" name="description" placeholder="Description (optional)">
+        <button type="submit">Add Route</button>
+    </form>
+
+    <form onsubmit="startTailscale(event)" style="display: inline-block; margin-right: 10px;">
+        <button type="submit">Start Tailscale</button>
+    </form>
+
+    <form method="post" action="/stop" onsubmit="return confirmStop();" style="display: inline-block;">
+        <button type="submit">Stop Tailscale</button>
+    </form>
+	<div id="tailscale-status" style="margin-bottom: 15px;">
+    {% if tailscale_status == 'running' %}
+        <span style="color: green; font-weight: bold;">✅ Tailscale is running</span>
+    {% elif tailscale_status == 'stopped' %}
+        <span style="color: red; font-weight: bold;">❌ Tailscale is stopped</span>
+    {% else %}
+        <span style="color: gray; font-weight: bold;">⚠️ Tailscale status unknown</span>
+    {% endif %}
+</div>
+
+    <h2>Advertised Routes</h2>
+    <input class="filter-box" onkeyup="filterTable('routes-table', this.value)" placeholder="Filter routes or descriptions...">
+    <table id="routes-table">
+        <thead>
+            <tr>
+                <th onclick="sortTable('routes-table', 0)">Route</th>
+                <th onclick="sortTable('routes-table', 1)">Description</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for entry in routes %}
+            <tr>
+                <td>{{ entry.route }}</td>
+                <td>{{ entry.description }}</td>
+                <td>
+                    <form method="post" action="/remove" style="margin: 0;">
+                        <input type="hidden" name="route" value="{{ entry.route }}">
+                        <button type="submit">Remove</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h2>Connected Devices</h2>
+    <input class="filter-box" onkeyup="filterTable('devices-table', this.value)" placeholder="Filter hostname, IP, user, OS, status...">
+    <table id="devices-table">
+        <thead>
+            <tr>
+                <th onclick="sortTable('devices-table', 0)">Hostname</th>
+                <th onclick="sortTable('devices-table', 1)">IP</th>
+                <th onclick="sortTable('devices-table', 2)">Status</th>
+                <th onclick="sortTable('devices-table', 3)">User</th>
+                <th onclick="sortTable('devices-table', 4)">OS</th>
+            </tr>
+        </thead>
+        <tbody id="devices-tbody">
+            {% for device in devices %}
+            <tr>
+                <td>{{ device.hostname }}</td>
+                <td>{{ device.ip }}</td>
+                <td class="status-{{ device.status|lower }}">{{ device.status }}</td>
+                <td>{{ device.user }}</td>
+                <td>{{ device.os }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+<script>
+function confirmStop() {
+    return confirm("⚠️ WARNING: This will bring down the Tailscale interface and disconnect routes.\nAre you sure you want to proceed?");
+}
+
+function loadDevices() {
+    fetch("/devices")
+        .then(response => response.json())
+        .then(data => {
+            const tableBody = document.getElementById("devices-tbody");
+            tableBody.innerHTML = "";
+
+            data.devices.forEach(device => {
+                const row = document.createElement("tr");
+
+                row.innerHTML = `
+                    <td>${device.hostname}</td>
+                    <td>${device.ip}</td>
+                    <td class="status-${device.status.toLowerCase()}">${device.status}</td>
+                    <td>${device.user}</td>
+                    <td>${device.os}</td>
+                `;
+                tableBody.appendChild(row);
+            });
+        });
+}
+
+function sortTable(tableId, colIndex) {
+    const table = document.getElementById(tableId);
+    const rows = Array.from(table.rows).slice(1); // skip header
+    const asc = table.getAttribute("data-sort-dir") !== "asc";
+    rows.sort((a, b) => {
+        const A = a.cells[colIndex].innerText.toLowerCase();
+        const B = b.cells[colIndex].innerText.toLowerCase();
+        return A.localeCompare(B) * (asc ? 1 : -1);
+    });
+    rows.forEach(row => table.tBodies[0].appendChild(row));
+    table.setAttribute("data-sort-dir", asc ? "asc" : "desc");
+}
+
+function filterTable(tableId, query) {
+    const rows = document.getElementById(tableId).getElementsByTagName("tbody")[0].getElementsByTagName("tr");
+    const text = query.toLowerCase();
+    for (let row of rows) {
+        row.style.display = [...row.cells].some(cell => cell.innerText.toLowerCase().includes(text)) ? "" : "none";
+    }
+}
+
+window.onload = function() {
+    loadDevices();
+};
+
+let retryCount = 0;
+
+function startTailscale(event) {
+    event.preventDefault();
+    const statusDiv = document.getElementById("status-message");
+    statusDiv.textContent = "⏳ Starting Tailscale...";
+
+    document.getElementById("devices-tbody").innerHTML = `
+        <tr><td colspan="5">Starting Tailscale, please wait...</td></tr>
+    `;
+
+    fetch("/start", { method: "POST" })
+        .then(() => {
+            retryCount = 0;
+            setTimeout(checkDevicesReady, 2000);
+        })
+        .catch(error => {
+            console.error("Failed to start Tailscale:", error);
+            statusDiv.textContent = "❌ Failed to start Tailscale.";
+        });
+}
+
+function checkDevicesReady() {
+    fetch("/devices")
+        .then(response => response.json())
+        .then(data => {
+            const anyOnline = data.devices.some(device => device.status === "Online");
+            const statusDiv = document.getElementById("status-message");
+
+            if (anyOnline || retryCount >= 5) {
+                statusDiv.textContent = "✅ Tailscale started.";
+                loadDevices();
+            } else {
+                retryCount++;
+                setTimeout(checkDevicesReady, 2000);
+            }
+        })
+        .catch(error => {
+            console.error("Error checking devices:", error);
+        });
+}
+</script>
+
+</body>
+</html>
