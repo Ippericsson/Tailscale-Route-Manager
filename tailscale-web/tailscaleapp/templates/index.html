@@ -133,6 +133,7 @@
                 <th onclick="sortTable('devices-table', 2)">Status</th>
                 <th onclick="sortTable('devices-table', 3)">User</th>
                 <th onclick="sortTable('devices-table', 4)">OS</th>
+		<th onclick="sortTable('devices-table', 5)">Connection</th>
             </tr>
         </thead>
         <tbody id="devices-tbody">
@@ -143,6 +144,7 @@
                 <td class="status-{{ device.status|lower }}">{{ device.status }}</td>
                 <td>{{ device.user }}</td>
                 <td>{{ device.os }}</td>
+		<td>{{ device.connection }}</td>
             </tr>
             {% endfor %}
         </tbody>
@@ -169,6 +171,7 @@ function loadDevices() {
                     <td class="status-${device.status.toLowerCase()}">${device.status}</td>
                     <td>${device.user}</td>
                     <td>${device.os}</td>
+		    <td>${device.connection || ""}</td>
                 `;
                 tableBody.appendChild(row);
             });

@@ -13,7 +13,6 @@ app = Flask(__name__, template_folder='templates', static_folder='static')
 
 ROUTE_FILE = "/etc/Tailscale-Route-Manager/routes.json"
 TAILSCALE_CMD = ["sudo", "/usr/bin/tailscale"]
-
 CONFIG_PATH = "/etc/Tailscale-Route-Manager/config.py"
 
 if not os.path.exists(CONFIG_PATH):
@@ -41,7 +40,6 @@ def requires_auth(f):
 
 def get_routes():
     if not os.path.exists(ROUTE_FILE):
-        # Create empty routes.json if it doesn't exist
         try:
             with open(ROUTE_FILE, "w") as f:
                 json.dump([], f)
@@ -80,6 +78,7 @@ def get_connected_devices():
         ip_user_map = {}
         ip_hostname_map = {}
         ip_os_map = {}
+        ip_conn_map = {}
 
         for line in raw_output.strip().splitlines():
             parts = line.split()
@@ -88,9 +87,22 @@ def get_connected_devices():
                 hostname = parts[1]
                 user = parts[2].replace("@", "") if parts[2] != "-" else ""
                 os_type = parts[3]
+                connection_details = " ".join(parts[4:])
+
+                # Determine connection type and details
+                if "direct" in connection_details:
+                    match = re.search(r"direct ([\d\.]+)", connection_details)
+                    conn = f"direct ({match.group(1)})" if match else "direct"
+                elif "relay" in connection_details:
+                    match = re.search(r'relay "([^"]+)"', connection_details)
+                    conn = f'relay ({match.group(1)})' if match else "relay"
+                else:
+                    conn = ""
+
                 ip_user_map[ip] = user
                 ip_hostname_map[ip] = hostname
                 ip_os_map[ip] = os_type
+                ip_conn_map[ip] = conn
 
         devices = []
 
@@ -102,7 +114,8 @@ def get_connected_devices():
             "online": self_info.get("Online", True),
             "status": "Online" if self_info.get("Online", True) else "Offline",
             "user": ip_user_map.get(self_ip, ""),
-            "os": ip_os_map.get(self_ip, "")
+            "os": ip_os_map.get(self_ip, ""),
+            "connection": ip_conn_map.get(self_ip, "")
         })
 
         for peer in status.get("Peer", {}).values():
@@ -113,7 +126,8 @@ def get_connected_devices():
                 "online": peer.get("Online", False),
                 "status": "Online" if peer.get("Online", False) else "Offline",
                 "user": ip_user_map.get(ip, ""),
-                "os": ip_os_map.get(ip, "")
+                "os": ip_os_map.get(ip, ""),
+                "connection": ip_conn_map.get(ip, "") if peer.get("Online", False) else ""
             })
 
         return devices
@@ -164,6 +178,7 @@ def index():
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
     return response
+
 @app.route("/add", methods=["POST"])
 @requires_auth
 def add_route():
@@ -211,7 +226,21 @@ def stop_tailscale():
 @app.route("/devices")
 @requires_auth
 def devices_api():
-    response = jsonify(devices=get_connected_devices())
+    devices = get_connected_devices()
+
+    # Ensure only the necessary fields are passed (optional, but safe)
+    sanitized_devices = []
+    for d in devices:
+        sanitized_devices.append({
+            "hostname": d.get("hostname", ""),
+            "ip": d.get("ip", ""),
+            "status": d.get("status", ""),
+            "user": d.get("user", ""),
+            "os": d.get("os", ""),
+            "connection": d.get("connection", "")
+        })
+
+    response = jsonify(devices=sanitized_devices)
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
